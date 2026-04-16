@@ -1,0 +1,27 @@
+Description: Imports MarkEdit into Munki repository.
+Identifier: com.github.rodchristiansen.munki.MarkEdit
+MinimumVersion: "2.3"
+ParentRecipe: com.github.rodchristiansen.download.MarkEdit
+Input:
+  NAME: MarkEdit
+  MUNKI_REPO_SUBDIR: ''
+  MUNKI_CATEGORY: Productivity
+  MUNKI_DEVELOPER: MarkEdit
+  pkginfo:
+    catalogs:
+      - testing
+    description: A free and open-source Markdown editor for macOS with performance
+      and extensibility in mind.
+    display_name: MarkEdit
+    supported_architectures:
+      - arm64
+    unattended_install: true
+    unattended_uninstall: true
+Process:
+  - Processor: AppDmgVersioner
+    Arguments:
+      dmg_path: "%pathname%"
+  - Processor: MunkiImporter
+    Arguments:
+      pkg_path: "%pathname%"
+      repo_subdirectory: "%MUNKI_REPO_SUBDIR%"

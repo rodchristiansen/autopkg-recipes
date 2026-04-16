@@ -1,0 +1,17 @@
+Description: Downloads the latest MarkEdit Apple Silicon DMG from GitHub releases.
+Identifier: com.github.rodchristiansen.download.MarkEdit
+MinimumVersion: "2.3"
+Input:
+  NAME: MarkEdit
+  GITHUB_REPO: MarkEdit-app/MarkEdit
+  ASSET_REGEX: MarkEdit-.*-apple-silicon\.dmg$
+Process:
+  - Processor: GitHubReleasesInfoProvider
+    Arguments:
+      github_repo: "%GITHUB_REPO%"
+      asset_regex: "%ASSET_REGEX%"
+  - Processor: URLDownloader
+    Arguments:
+      url: "%url%"
+      filename: "%NAME%.dmg"
+  - Processor: EndOfCheckPhase
