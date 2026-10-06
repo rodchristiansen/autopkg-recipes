@@ -1,0 +1,16 @@
+Description: Downloads the latest Azure CLI macOS tarball for one architecture (arm64 or x86_64) from GitHub releases.
+Identifier: com.github.rodchristiansen.download.AzureCLI
+MinimumVersion: "2.3"
+Input:
+  NAME: AzureCLI
+  ARCH: arm64
+Process:
+  - Processor: URLTextSearcher
+    Arguments:
+      url: https://api.github.com/repos/Azure/azure-cli/releases/latest
+      re_pattern: '"tag_name":\s*"azure-cli-(?P<version>[\d.]+)"'
+  - Processor: URLDownloader
+    Arguments:
+      url: https://github.com/Azure/azure-cli/releases/download/azure-cli-%version%/azure-cli-%version%-macos-%ARCH%.tar.gz
+      filename: "%NAME%-%version%-%ARCH%.tar.gz"
+  - Processor: EndOfCheckPhase

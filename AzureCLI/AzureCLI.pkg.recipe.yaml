@@ -1,0 +1,70 @@
+Description: |
+  Packages the Azure CLI macOS tarball into /usr/local/azure-cli with an az launcher in /usr/local/bin.
+  The tarball has no Python of its own. The launcher runs it on Mac Admins Python from
+  /Library/ManagedFrameworks, picking the Python version the tarball was built for, so that
+  framework must be installed (see MacAdminsPython.munki.recipe.yaml). Setting AZ_PYTHON overrides it.
+  Build one package per ARCH and give each its own PKG_ID, so Munki can tell the two receipts
+  apart. Package ids cannot contain underscores, so x86_64 needs a hand-picked id.
+Identifier: com.github.rodchristiansen.pkg.AzureCLI
+MinimumVersion: "2.3"
+ParentRecipe: com.github.rodchristiansen.download.AzureCLI
+Input:
+  NAME: AzureCLI
+  PKG_ID: com.github.rodchristiansen.pkg.AzureCLI.arm64
+Process:
+  - Processor: PkgRootCreator
+    Arguments:
+      pkgroot: "%RECIPE_CACHE_DIR%/pkgroot"
+      pkgdirs:
+        usr: "0755"
+        usr/local: "0755"
+        usr/local/bin: "0755"
+        usr/local/azure-cli: "0755"
+  - Processor: Unarchiver
+    Arguments:
+      archive_path: "%pathname%"
+      destination_path: "%RECIPE_CACHE_DIR%/pkgroot/usr/local/azure-cli"
+      purge_destination: true
+  - Processor: FileCreator
+    Arguments:
+      file_path: "%RECIPE_CACHE_DIR%/pkgroot/usr/local/bin/az"
+      file_mode: "0755"
+      file_content: |
+        #!/bin/bash
+        AZ_HOME=/usr/local/azure-cli
+        if [[ -z "${AZ_PYTHON:-}" ]]; then
+            PY_LIB=$(cd "$AZ_HOME/libexec/lib" && ls -d python3.* | head -1)
+            PY_VER=${PY_LIB#python}
+            export AZ_PYTHON=/Library/ManagedFrameworks/Python/Python3.framework/Versions/$PY_VER/bin/python$PY_VER
+        fi
+        exec "$AZ_HOME/bin/az" "$@"
+  - Processor: PkgRootCreator
+    Arguments:
+      pkgroot: "%RECIPE_CACHE_DIR%/Scripts"
+      pkgdirs: {}
+  - Processor: FileCreator
+    Arguments:
+      file_path: "%RECIPE_CACHE_DIR%/Scripts/preinstall"
+      file_mode: "0755"
+      file_content: |
+        #!/bin/bash
+        rm -rf "$3/usr/local/azure-cli"
+        exit 0
+  - Processor: PkgCreator
+    Arguments:
+      pkg_request:
+        pkgroot: pkgroot
+        pkgdir: "%RECIPE_CACHE_DIR%"
+        pkgname: "%NAME%-%ARCH%-%version%"
+        id: "%PKG_ID%"
+        version: "%version%"
+        scripts: Scripts
+        chown:
+          - path: usr
+            user: root
+            group: wheel
+  - Processor: PathDeleter
+    Arguments:
+      path_list:
+        - "%RECIPE_CACHE_DIR%/pkgroot"
+        - "%RECIPE_CACHE_DIR%/Scripts"
