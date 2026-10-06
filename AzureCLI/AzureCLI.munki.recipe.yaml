@@ -1,0 +1,24 @@
+Description: Imports the Azure CLI package for one architecture into Munki. Set ARCH to arm64 or x86_64 and PKG_ID to a matching package id, one override per architecture.
+Identifier: com.github.rodchristiansen.munki.AzureCLI
+MinimumVersion: "2.3"
+ParentRecipe: com.github.rodchristiansen.pkg.AzureCLI
+Input:
+  NAME: AzureCLI
+  MUNKI_REPO_SUBDIR: ''
+  MUNKI_CATEGORY: Developer Tools
+  MUNKI_DEVELOPER: Microsoft
+  pkginfo:
+    catalogs:
+      - testing
+    description: The Azure command-line interface. Runs on Mac Admins Python from /Library/ManagedFrameworks.
+    display_name: Azure CLI
+    name: "%NAME%"
+    supported_architectures:
+      - "%ARCH%"
+    unattended_install: true
+    unattended_uninstall: true
+Process:
+  - Processor: MunkiImporter
+    Arguments:
+      pkg_path: "%pkg_path%"
+      repo_subdirectory: "%MUNKI_REPO_SUBDIR%"

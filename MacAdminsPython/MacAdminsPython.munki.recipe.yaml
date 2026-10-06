@@ -1,0 +1,23 @@
+Description: Imports Mac Admins Python into a Munki repository. It installs to /Library/ManagedFrameworks/Python/Python3.framework.
+Identifier: com.github.rodchristiansen.munki.MacAdminsPython
+MinimumVersion: "2.3"
+ParentRecipe: com.github.rodchristiansen.download.MacAdminsPython
+Input:
+  NAME: MacAdminsPython
+  MUNKI_REPO_SUBDIR: ''
+  MUNKI_CATEGORY: Management
+  MUNKI_DEVELOPER: Mac Admins Open Source
+  pkginfo:
+    catalogs:
+      - testing
+    description: Python 3 framework with the recommended macadmin modules, installed to /Library/ManagedFrameworks.
+    display_name: Mac Admins Python
+    name: "%NAME%"
+    version: "%version%"
+    unattended_install: true
+    unattended_uninstall: false
+Process:
+  - Processor: MunkiImporter
+    Arguments:
+      pkg_path: "%pathname%"
+      repo_subdirectory: "%MUNKI_REPO_SUBDIR%"

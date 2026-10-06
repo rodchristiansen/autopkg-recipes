@@ -1,0 +1,24 @@
+Description: Downloads the latest Mac Admins Python "recommended" package from GitHub releases and verifies its signature.
+Identifier: com.github.rodchristiansen.download.MacAdminsPython
+MinimumVersion: "2.3"
+Input:
+  NAME: MacAdminsPython
+  GITHUB_REPO: macadmins/python
+  ASSET_REGEX: python_recommended_signed-[\d.]+\.pkg$
+Process:
+  - Processor: GitHubReleasesInfoProvider
+    Arguments:
+      github_repo: "%GITHUB_REPO%"
+      asset_regex: "%ASSET_REGEX%"
+  - Processor: URLDownloader
+    Arguments:
+      url: "%url%"
+      filename: "%NAME%-%version%.pkg"
+  - Processor: EndOfCheckPhase
+  - Processor: CodeSignatureVerifier
+    Arguments:
+      input_path: "%pathname%"
+      expected_authority_names:
+        - "Developer ID Installer: Mac Admins Open Source (T4SK8ZXCXG)"
+        - Developer ID Certification Authority
+        - Apple Root CA
