@@ -1,4 +1,6 @@
-Description: Downloads the latest Azure CLI macOS tarball for one architecture (arm64 or x86_64) from GitHub releases.
+Description: |
+  Downloads the latest Azure CLI macOS tarball for one architecture (arm64 or x86_64) from GitHub releases.
+  The tarball is unsigned, so it is checked against the SHA-256 digest published in the release notes.
 Identifier: com.github.rodchristiansen.download.AzureCLI
 MinimumVersion: "2.3"
 Input:
@@ -7,10 +9,14 @@ Input:
 Process:
   - Processor: URLTextSearcher
     Arguments:
-      url: https://api.github.com/repos/Azure/azure-cli/releases/latest
-      re_pattern: '"tag_name":\s*"azure-cli-(?P<version>[\d.]+)"'
+      url: https://github.com/Azure/azure-cli/releases/latest
+      re_pattern: '(?P<sha256>[0-9a-f]{64})\s+azure-cli-(?P<version>[\d.]+)-macos-%ARCH%\.tar\.gz'
   - Processor: URLDownloader
     Arguments:
       url: https://github.com/Azure/azure-cli/releases/download/azure-cli-%version%/azure-cli-%version%-macos-%ARCH%.tar.gz
       filename: "%NAME%-%version%-%ARCH%.tar.gz"
   - Processor: EndOfCheckPhase
+  - Processor: Sha256Verifier
+    Arguments:
+      input_path: "%pathname%"
+      expected_sha256: "%sha256%"
