@@ -3,6 +3,11 @@ Description: |
   The tarball has no Python of its own. The launcher runs it on Mac Admins Python from
   /Library/ManagedFrameworks, picking the Python version the tarball was built for, so that
   framework must be installed (see MacAdminsPython.munki.recipe.yaml). Setting AZ_PYTHON overrides it.
+  The launcher also turns on the macOS authentication broker (core.enable_broker_on_mac), so az
+  refreshes tokens silently through the Microsoft Enterprise SSO extension instead of asking the
+  user to sign in again. Setting AZURE_CORE_ENABLE_BROKER_ON_MAC=false opts out.
+  PKG_REVISION is appended to the package version so a launcher change reaches Macs that already
+  have this Azure CLI version. Raise it whenever the launcher changes; never lower it.
   Build one package per ARCH and give each its own PKG_ID, so Munki can tell the two receipts
   apart. Package ids cannot contain underscores, so x86_64 needs a hand-picked id.
 Identifier: com.github.rodchristiansen.pkg.AzureCLI
@@ -11,6 +16,7 @@ ParentRecipe: com.github.rodchristiansen.download.AzureCLI
 Input:
   NAME: AzureCLI
   PKG_ID: com.github.rodchristiansen.pkg.AzureCLI.arm64
+  PKG_REVISION: "1"
 Process:
   - Processor: PkgRootCreator
     Arguments:
@@ -37,6 +43,7 @@ Process:
             PY_VER=${PY_LIB#python}
             export AZ_PYTHON=/Library/ManagedFrameworks/Python/Python3.framework/Versions/$PY_VER/bin/python$PY_VER
         fi
+        export AZURE_CORE_ENABLE_BROKER_ON_MAC="${AZURE_CORE_ENABLE_BROKER_ON_MAC:-true}"
         exec "$AZ_HOME/bin/az" "$@"
   - Processor: PkgRootCreator
     Arguments:
@@ -55,9 +62,9 @@ Process:
       pkg_request:
         pkgroot: pkgroot
         pkgdir: "%RECIPE_CACHE_DIR%"
-        pkgname: "%NAME%-%ARCH%-%version%"
+        pkgname: "%NAME%-%ARCH%-%version%.%PKG_REVISION%"
         id: "%PKG_ID%"
-        version: "%version%"
+        version: "%version%.%PKG_REVISION%"
         scripts: Scripts
         chown:
           - path: usr
