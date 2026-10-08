@@ -6,8 +6,9 @@ Description: |
   The launcher also turns on the macOS authentication broker (core.enable_broker_on_mac), so az
   refreshes tokens silently through the Microsoft Enterprise SSO extension instead of asking the
   user to sign in again. Setting AZURE_CORE_ENABLE_BROKER_ON_MAC=false opts out.
-  PKG_REVISION is appended to the package version so a launcher change reaches Macs that already
-  have this Azure CLI version. Raise it whenever the launcher changes; never lower it.
+  VersionRevisioner sets version to the Azure CLI release plus PKG_REVISION, so a launcher change
+  reaches Macs that already have this Azure CLI release. Raise PKG_REVISION whenever the launcher
+  changes; never lower it.
   Build one package per ARCH and give each its own PKG_ID, so Munki can tell the two receipts
   apart. Package ids cannot contain underscores, so x86_64 needs a hand-picked id.
 Identifier: com.github.rodchristiansen.pkg.AzureCLI
@@ -18,6 +19,10 @@ Input:
   PKG_ID: com.github.rodchristiansen.pkg.AzureCLI.arm64
   PKG_REVISION: "1"
 Process:
+  - Processor: VersionRevisioner
+    Arguments:
+      base_version: "%az_version%"
+      revision: "%PKG_REVISION%"
   - Processor: PkgRootCreator
     Arguments:
       pkgroot: "%RECIPE_CACHE_DIR%/pkgroot"
@@ -62,9 +67,9 @@ Process:
       pkg_request:
         pkgroot: pkgroot
         pkgdir: "%RECIPE_CACHE_DIR%"
-        pkgname: "%NAME%-%ARCH%-%version%.%PKG_REVISION%"
+        pkgname: "%NAME%-%ARCH%-%version%"
         id: "%PKG_ID%"
-        version: "%version%.%PKG_REVISION%"
+        version: "%version%"
         scripts: Scripts
         chown:
           - path: usr
