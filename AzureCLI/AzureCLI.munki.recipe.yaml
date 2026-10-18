@@ -7,9 +7,11 @@ Description: |
     missing or older, the /usr/local/bin/az launcher is not the managed one, or a Homebrew
     azure-cli keg exists in either prefix. A newer receipt counts as installed.
   - preinstall_script removes a Homebrew az symlink at /usr/local/bin/az so the package writes
-    its launcher there instead of following the link into the keg.
+    its launcher there instead of following the link into the keg, and refuses a symlinked
+    /usr/local or /usr/local/bin.
   - postinstall_script uninstalls the Homebrew azure-cli formula as the Homebrew owner, and
-    removes the keg and its links directly if brew cannot.
+    removes the keg and its links as that owner if brew cannot. Nothing under a Homebrew prefix
+    is removed as root. It fails if /usr/local/bin/az is not the root-owned launcher afterwards.
   Because the installcheck runs on every Munki check, a Homebrew azure-cli installed later is
   removed again on the next run.
 Identifier: com.github.rodchristiansen.munki.AzureCLI
@@ -67,7 +69,12 @@ Process:
         preinstall_script: |
           #!/bin/bash
           # A Homebrew az symlink at /usr/local/bin/az (Intel Homebrew) would make the
-          # installer write the launcher into the keg. Remove the link first.
+          # installer write the launcher into the keg. Remove the link first. Refuse to
+          # install through a symlinked /usr/local or /usr/local/bin.
+          if [[ -L /usr/local || -L /usr/local/bin ]]; then
+              echo "/usr/local or /usr/local/bin is a symlink; not installing through it"
+              exit 1
+          fi
           if [[ -L /usr/local/bin/az ]]; then
               /bin/rm -f /usr/local/bin/az
           fi
@@ -75,27 +82,49 @@ Process:
         postinstall_script: |
           #!/bin/bash
           # Remove Homebrew's azure-cli so the managed az is the one on PATH.
+          # Everything under a Homebrew prefix belongs to the Homebrew owner, so every
+          # removal runs as that user, never as root.
           for prefix in /opt/homebrew /usr/local; do
+              [[ -L "$prefix" || -L "$prefix/Cellar" ]] && continue
               keg="$prefix/Cellar/azure-cli"
-              [[ -d "$keg" ]] || continue
+              [[ -d "$keg" && ! -L "$keg" ]] || continue
               owner=$(/bin/ls -ld "$prefix/Cellar" | /usr/bin/awk '{print $3}')
-              if [[ -x "$prefix/bin/brew" && -n "$owner" && "$owner" != root ]]; then
+              if [[ -z "$owner" || "$owner" == root ]]; then
+                  echo "$prefix/Cellar is owned by root; leaving it for an admin"
+                  continue
+              fi
+              as_owner() {
                   /usr/bin/sudo -u "$owner" -H /usr/bin/env \
                       PATH="$prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
                       HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
-                      "$prefix/bin/brew" uninstall --force --ignore-dependencies azure-cli
+                      "$@"
+              }
+              if [[ -x "$prefix/bin/brew" ]]; then
+                  as_owner "$prefix/bin/brew" uninstall --force --ignore-dependencies azure-cli
               fi
               if [[ -d "$keg" ]]; then
-                  echo "brew could not uninstall azure-cli in $prefix; removing the keg directly"
-                  /usr/bin/find "$prefix/bin" "$prefix/etc" "$prefix/share" -type l 2>/dev/null |
-                      while read -r link; do
-                          case "$(/usr/bin/readlink "$link")" in
-                              *Cellar/azure-cli/*) /bin/rm -f "$link" ;;
-                          esac
-                      done
-                  /bin/rm -rf "$keg" "$prefix/opt/azure-cli" "$prefix/var/homebrew/linked/azure-cli"
+                  echo "brew could not uninstall azure-cli in $prefix; removing the keg as $owner"
+                  as_owner /bin/bash -c '
+                      prefix=$1
+                      /usr/bin/find "$prefix/bin" "$prefix/etc" "$prefix/share" -type l 2>/dev/null |
+                          while read -r link; do
+                              case "$(/usr/bin/readlink "$link")" in
+                                  *Cellar/azure-cli/*) /bin/rm -f "$link" ;;
+                              esac
+                          done
+                      /bin/rm -rf "$prefix/Cellar/azure-cli" "$prefix/opt/azure-cli" "$prefix/var/homebrew/linked/azure-cli"
+                  ' _ "$prefix"
               fi
           done
+
+          # The managed launcher must be a root-owned regular file, not something a
+          # user-writable Homebrew prefix put in its place.
+          launcher=/usr/local/bin/az
+          if [[ -L /usr/local/bin || -L "$launcher" || ! -f "$launcher" ]] ||
+              [[ "$(/bin/ls -l "$launcher" | /usr/bin/awk '{print $3}')" != root ]]; then
+              echo "$launcher is not the root-owned managed launcher"
+              exit 1
+          fi
           exit 0
   - Processor: MunkiImporter
     Arguments:
