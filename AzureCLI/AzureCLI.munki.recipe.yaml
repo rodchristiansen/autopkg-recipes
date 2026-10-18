@@ -1,4 +1,17 @@
-Description: Imports the Azure CLI package for one architecture into Munki. Set ARCH to arm64 or x86_64 and PKG_ID to a matching package id, one override per architecture.
+Description: |
+  Imports the Azure CLI package for one architecture into Munki. Set ARCH to arm64 or x86_64 and PKG_ID to a matching package id, one override per architecture.
+  The pkginfo makes the managed az the one that runs. A Homebrew azure-cli sits earlier on PATH
+  (/opt/homebrew/bin, or the same /usr/local/bin/az on Intel), and its az has neither the broker
+  setting nor the managed Python, so it is removed:
+  - installcheck_script reports the item as needing install while this version's receipt is
+    missing or older, the /usr/local/bin/az launcher is not the managed one, or a Homebrew
+    azure-cli keg exists in either prefix. A newer receipt counts as installed.
+  - preinstall_script removes a Homebrew az symlink at /usr/local/bin/az so the package writes
+    its launcher there instead of following the link into the keg.
+  - postinstall_script uninstalls the Homebrew azure-cli formula as the Homebrew owner, and
+    removes the keg and its links directly if brew cannot.
+  Because the installcheck runs on every Munki check, a Homebrew azure-cli installed later is
+  removed again on the next run.
 Identifier: com.github.rodchristiansen.munki.AzureCLI
 MinimumVersion: "2.3"
 ParentRecipe: com.github.rodchristiansen.pkg.AzureCLI
@@ -18,6 +31,72 @@ Input:
     unattended_install: true
     unattended_uninstall: true
 Process:
+  - Processor: MunkiPkginfoMerger
+    Arguments:
+      additional_pkginfo:
+        installcheck_script: |
+          #!/bin/bash
+          # Exit 0 when Munki should install this item, 1 when it is installed.
+          PKG_ID="%PKG_ID%"
+          WANT="%version%"
+
+          older() {
+              local IFS=.
+              local a=($1) b=($2) i
+              for ((i = 0; i < ${#a[@]} || i < ${#b[@]}; i++)); do
+                  ((10#${a[i]:-0} < 10#${b[i]:-0})) && return 0
+                  ((10#${a[i]:-0} > 10#${b[i]:-0})) && return 1
+              done
+              return 1
+          }
+
+          have=$(/usr/sbin/pkgutil --pkg-info "$PKG_ID" 2>/dev/null | /usr/bin/awk '/^version:/ {print $2}')
+          [[ -z "$have" ]] && exit 0
+          older "$WANT" "$have" && exit 1
+          older "$have" "$WANT" && exit 0
+
+          [[ -L /usr/local/bin/az ]] && exit 0
+          /usr/bin/grep -q '^AZ_HOME=/usr/local/azure-cli$' /usr/local/bin/az 2>/dev/null || exit 0
+          /usr/bin/grep -q AZURE_CORE_ENABLE_BROKER_ON_MAC /usr/local/bin/az || exit 0
+          [[ -x /usr/local/azure-cli/bin/az ]] || exit 0
+
+          for prefix in /opt/homebrew /usr/local; do
+              [[ -d "$prefix/Cellar/azure-cli" ]] && exit 0
+          done
+          exit 1
+        preinstall_script: |
+          #!/bin/bash
+          # A Homebrew az symlink at /usr/local/bin/az (Intel Homebrew) would make the
+          # installer write the launcher into the keg. Remove the link first.
+          if [[ -L /usr/local/bin/az ]]; then
+              /bin/rm -f /usr/local/bin/az
+          fi
+          exit 0
+        postinstall_script: |
+          #!/bin/bash
+          # Remove Homebrew's azure-cli so the managed az is the one on PATH.
+          for prefix in /opt/homebrew /usr/local; do
+              keg="$prefix/Cellar/azure-cli"
+              [[ -d "$keg" ]] || continue
+              owner=$(/bin/ls -ld "$prefix/Cellar" | /usr/bin/awk '{print $3}')
+              if [[ -x "$prefix/bin/brew" && -n "$owner" && "$owner" != root ]]; then
+                  /usr/bin/sudo -u "$owner" -H /usr/bin/env \
+                      PATH="$prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+                      HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
+                      "$prefix/bin/brew" uninstall --force --ignore-dependencies azure-cli
+              fi
+              if [[ -d "$keg" ]]; then
+                  echo "brew could not uninstall azure-cli in $prefix; removing the keg directly"
+                  /usr/bin/find "$prefix/bin" "$prefix/etc" "$prefix/share" -type l 2>/dev/null |
+                      while read -r link; do
+                          case "$(/usr/bin/readlink "$link")" in
+                              *Cellar/azure-cli/*) /bin/rm -f "$link" ;;
+                          esac
+                      done
+                  /bin/rm -rf "$keg" "$prefix/opt/azure-cli" "$prefix/var/homebrew/linked/azure-cli"
+              fi
+          done
+          exit 0
   - Processor: MunkiImporter
     Arguments:
       pkg_path: "%pkg_path%"
