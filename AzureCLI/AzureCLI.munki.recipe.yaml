@@ -12,6 +12,8 @@ Description: |
   - postinstall_script uninstalls the Homebrew azure-cli formula as the Homebrew owner, and
     removes the keg and its links as that owner if brew cannot. Nothing under a Homebrew prefix
     is removed as root. It fails if /usr/local/bin/az is not the root-owned launcher afterwards.
+  PkginfoRenamer names the pkginfo NAME-ARCH-version, so the two per-architecture imports of
+  one release do not collide into a __1 file.
   Because the installcheck runs on every Munki check, a Homebrew azure-cli installed later is
   removed again on the next run.
 Identifier: com.github.rodchristiansen.munki.AzureCLI
@@ -130,3 +132,6 @@ Process:
     Arguments:
       pkg_path: "%pkg_path%"
       repo_subdirectory: "%MUNKI_REPO_SUBDIR%"
+  - Processor: PkginfoRenamer
+    Arguments:
+      pkginfo_name: "%NAME%-%ARCH%-%version%"
